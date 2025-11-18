@@ -109,6 +109,70 @@ void overwrite_symbols() noexcept;
 
 namespace hooks {
 
+bool should_track_mmap(int flags)
+{
+    if (flags & MAP_SHARED) {
+        return false;
+    }
+
+    if ((flags & MAP_ANONYMOUS) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+struct mmap
+{
+    static constexpr auto name = "mmap";
+    static constexpr auto original = &::mmap;
+
+    static void* hook(void* addr, size_t len, int prot, int flags, int fd, __off_t offset) noexcept
+    {
+        auto ptr = original(addr, len, prot, flags, fd, offset);
+
+        if (ptr && should_track_mmap(flags)) {
+            heaptrack_malloc(ptr, len);
+        }
+
+        return ptr;
+    }
+};
+
+struct munmap
+{
+    static constexpr auto name = "munmap";
+    static constexpr auto original = &::munmap;
+
+    static int hook(void* ptr, size_t size) noexcept
+    {
+        heaptrack_free(ptr);
+        return original(ptr, size);
+    }
+};
+
+struct mremap
+{
+    static constexpr auto name = "mremap";
+    static constexpr auto original = &::mremap;
+
+    static void* hook(void *addr, size_t old_len, size_t new_len, int flags, ...) noexcept
+    {
+        if (flags & MREMAP_FIXED) {
+            fprintf(stderr, "mremap used with unsupported MREMAP_FIXED\n");
+            return nullptr;
+        }
+
+        auto ret = original(addr, old_len, new_len, flags);
+
+        if (ret) {
+            heaptrack_realloc(addr, new_len, ret);
+        }
+
+        return ret;
+    }
+};
+
 struct malloc
 {
     static constexpr auto name = "malloc";
@@ -359,6 +423,9 @@ void apply(const char* symname, Elf::Addr addr, bool restore)
 {
     // TODO: use std::apply once we can rely on C++17
     hook<malloc>(symname, addr, restore) || hook<free>(symname, addr, restore) || hook<realloc>(symname, addr, restore)
+        || hook<mmap>(symname, addr, restore)
+        || hook<munmap>(symname, addr, restore)
+        || hook<mremap>(symname, addr, restore)
         || hook<calloc>(symname, addr, restore)
 #if HAVE_CFREE
         || hook<cfree>(symname, addr, restore)

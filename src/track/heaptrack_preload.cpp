@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -95,6 +96,9 @@ struct hook
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wignored-attributes"
 
+HOOK(mmap, HookType::Required);
+HOOK(munmap, HookType::Required);
+HOOK(mremap, HookType::Required);
 HOOK(malloc, HookType::Required);
 HOOK(free, HookType::Required);
 HOOK(calloc, HookType::Required);
@@ -182,6 +186,9 @@ void init()
             hooks::malloc.init();
             hooks::free.init();
             hooks::calloc.init();
+            hooks::mmap.init();
+            hooks::munmap.init();
+            hooks::mremap.init();
 #if HAVE_CFREE
             hooks::cfree.init();
 #endif
@@ -218,6 +225,73 @@ void init()
 extern "C" {
 
 /// TODO: memalign, pvalloc, ...?
+
+void* mmap(void* addr, size_t len, int prot, int flags, int fd, __off_t offset) LIBC_FUN_ATTRS
+{
+    if (!hooks::mmap) {
+        hooks::init();
+    }
+
+    void* ptr = hooks::mmap(addr, len, prot, flags, fd, offset);
+
+    if (ptr == nullptr) {
+        return ptr;
+    }
+
+    if (len == 0) {
+        return ptr;
+    }
+
+    if ((prot & PROT_WRITE) == 0) {
+        // fprintf(stderr, "[ignore] mmap used without PROT_WRITE: prot=%x flags=%x len=%lu fd=%i\n", prot, flags, len, fd);
+        // return ptr;
+    }
+
+    if ((flags & MAP_ANONYMOUS) == 0) {
+        fprintf(stderr, "[warn] mmap used without MAP_ANONYMOUS: prot=%x flags=%x len=%lu fd=%i\n", prot, flags, len, fd);
+    }
+
+    heaptrack_malloc(ptr, len);
+    return ptr;
+}
+
+int munmap(void* ptr, size_t size) LIBC_FUN_ATTRS
+{
+    if (!hooks::munmap) {
+        hooks::init();
+    }
+
+    if (hooks::dummyPool().isDummyAllocation(ptr)) {
+        return 0;
+    }
+
+    // call handler before handing over the real free implementation
+    // to ensure the ptr is not reused in-between and thus the output
+    // stays consistent
+    heaptrack_free(ptr);
+
+    return hooks::munmap(ptr, size);
+}
+
+void* mremap(void* addr, size_t old_len, size_t new_len, int flags, ...) LIBC_FUN_ATTRS
+{
+    if (!hooks::realloc) {
+        hooks::init();
+    }
+
+    if (flags & MREMAP_FIXED) {
+        fprintf(stderr, "mremap used with unsupported MREMAP_FIXED\n");
+        return nullptr;
+    }
+
+    void* ret = hooks::mremap(addr, old_len, new_len, flags);
+
+    if (ret) {
+        heaptrack_realloc(addr, new_len, ret);
+    }
+
+    return ret;
+}
 
 void* malloc(size_t size) LIBC_FUN_ATTRS
 {
@@ -501,5 +575,4 @@ int GC_posix_memalign(void** memptr, size_t alignment, size_t size) LIBC_FUN_ATT
 
     return ret;
 }
-
 }

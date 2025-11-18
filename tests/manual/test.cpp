@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "util/config.h"
+#include <sys/mman.h>
 
 #if defined(_ISOC11_SOURCE)
 #define HAVE_ALIGNED_ALLOC 1
@@ -31,8 +32,19 @@ struct Foo
 
 void asdf()
 {
-    int* i = new int;
-    printf("i in asdf: %p\n", (void*)i);
+    // int* i = new int;
+    // printf("i in asdf: %p\n", (void*)i);
+
+    const auto size = 1024*1024;
+    auto mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    printf("mmap (%u) in asdf: %p\n", size, (void*)mem);
+    usleep(10000);
+
+    const auto new_size = size * 2;
+    mem = mremap(mem, size, new_size, 0);
+    printf("mremap (%u) in asdf: %p\n", new_size, (void*)mem);
+
+    // munmap(mem, size);
 }
 
 void bar()
@@ -57,6 +69,14 @@ static Foo foo;
 
 int main()
 {
+    printf("startup\n");
+    // return 0;
+
+    const auto size = 1024*1024;
+    auto mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    printf("mem in main: %p\n", (void*)mem);
+    munmap(mem, size);
+
     Foo* f = new Foo;
     printf("new Foo: %p\n", (void*)f);
     delete f;
