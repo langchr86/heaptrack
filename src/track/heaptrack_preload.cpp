@@ -248,10 +248,11 @@ void* mmap(void* addr, size_t len, int prot, int flags, int fd, __off_t offset) 
     }
 
     if ((flags & MAP_ANONYMOUS) == 0) {
-        fprintf(stderr, "[warn] mmap used without MAP_ANONYMOUS: prot=%x flags=%x len=%lu fd=%i\n", prot, flags, len, fd);
+        // fprintf(stderr, "[warn] mmap used without MAP_ANONYMOUS: prot=%x flags=%x len=%lu fd=%i\n", prot, flags, len, fd);
     }
 
-    heaptrack_malloc(ptr, len);
+    // fprintf(stderr, "[info] try to heaptrack_malloc: ");
+    heaptrack_malloc(ptr, len, true);
     return ptr;
 }
 
@@ -268,7 +269,7 @@ int munmap(void* ptr, size_t size) LIBC_FUN_ATTRS
     // call handler before handing over the real free implementation
     // to ensure the ptr is not reused in-between and thus the output
     // stays consistent
-    heaptrack_free(ptr);
+    heaptrack_free(ptr, true);
 
     return hooks::munmap(ptr, size);
 }

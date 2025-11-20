@@ -27,9 +27,9 @@ void heaptrack_pause();
 
 void heaptrack_resume();
 
-void heaptrack_malloc(void* ptr, size_t size);
+void heaptrack_malloc(void* ptr, size_t size, bool print = false);
 
-void heaptrack_free(void* ptr);
+void heaptrack_free(void* ptr, bool print = false);
 
 void heaptrack_realloc(void* ptr_in, size_t size, void* ptr_out);
 void heaptrack_realloc2(uintptr_t ptr_in, size_t size, uintptr_t ptr_out);

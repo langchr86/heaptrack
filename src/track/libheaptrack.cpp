@@ -867,12 +867,24 @@ void heaptrack_resume()
     HeapTrack::setPaused(false);
 }
 
-void heaptrack_malloc(void* ptr, size_t size)
+void heaptrack_malloc(void* ptr, size_t size, bool print)
 {
+    if (print && HeapTrack::isPaused()) {
+        // fprintf(stderr, "HeapTrack::isPaused()\n");
+    }
+
+    if (print && RecursionGuard::isActive) {
+        // fprintf(stderr, "RecursionGuard::isActive\n");
+        // Trace::print();
+    }
+
     if (!HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_malloc(%p, %zu)", ptr, size);
+        if (print) {
+            fprintf(stderr, "heaptrack_malloc(%p, %zu)\n", ptr, size);
+        }
 
         Trace trace;
         trace.fill(2 + HEAPTRACK_DEBUG_BUILD * 2);
@@ -881,12 +893,15 @@ void heaptrack_malloc(void* ptr, size_t size)
     }
 }
 
-void heaptrack_free(void* ptr)
+void heaptrack_free(void* ptr, bool print)
 {
     if (!HeapTrack::isPaused() && ptr && !RecursionGuard::isActive) {
         RecursionGuard guard;
 
         debugLog<VeryVerboseOutput>("heaptrack_free(%p)", ptr);
+        if (print) {
+            fprintf(stderr, "heaptrack_free  (%p)\n", ptr);
+        }
 
         HeapTrack::op(guard, [&](HeapTrack& heaptrack) { heaptrack.handleFree(ptr); });
     }

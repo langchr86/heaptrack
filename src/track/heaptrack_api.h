@@ -54,6 +54,7 @@ __attribute__((weak)) void heaptrack_free(void* ptr);
 #endif
 
 #define heaptrack_report_alloc(ptr, size)                                                                              \
+    fprintf(stderr, "heaptrack_report_alloc\n");\
     if (heaptrack_malloc)                                                                                              \
     heaptrack_malloc(ptr, size)
 
